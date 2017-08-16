@@ -166,30 +166,31 @@ def find_traitors(mtx, mps, leaders):
 			traitors.append((mp[0], mp[1]['party'], best_party))
 	return traitors
 	
-def kmeans(mtx, mps, leaders):
+def kmeans(matx, mpv, leaders):
+	originalmps = mpv
 	oldleaders = []
 	generation = 1
 	while (oldleaders != leaders):
 		print("Year %d..." % generation)
 		generation += 1
 		mpscores = collections.defaultdict(int)
-		for mp in mps.items():
+		for mp in mpv.items():
 			bestval = -1
 			bestpar = ""
 			for leader in leaders:
-				if mtx[mp[0]][leader] > bestval:
-					bestval = mtx[mp[0]][leader]
-					bestpar = mps[leader]['party']
-			if bestpar != mps[mp[0]]['party']:
-				print("%s switched allegiance from %s to %s!" % (mp[0], mps[mp[0]]['party'], bestpar))
-			mps[mp[0]]['party'] = bestpar
-		for mpone in mps.items():
-			for mptwo in mps.items():
+				if matx[mp[0]][leader] > bestval:
+					bestval = matx[mp[0]][leader]
+					bestpar = mpv[leader]['party']
+			if bestpar != mpv[mp[0]]['party']:
+				print("%s switched allegiance from %s to %s!" % (mp[0], mpv[mp[0]]['party'], bestpar))
+			mpv[mp[0]]['party'] = bestpar
+		for mpone in mpv.items():
+			for mptwo in mpv.items():
 				if mpone[1]['party'] == mptwo[1]['party']:
-					mpscores[mptwo[0]] += mtx[mpone[0]][mptwo[0]]
+					mpscores[mptwo[0]] += matx[mpone[0]][mptwo[0]]
 		partybestval = collections.defaultdict(int)
 		partybestper = {}
-		for mp in mps.items():
+		for mp in mpv.items():
 			if mpscores[mp[0]] > partybestval[mp[1]['party']]:
 				partybestval[mp[1]['party']] = mpscores[mp[0]]
 				partybestper[mp[1]['party']] = mp[0]
@@ -199,8 +200,19 @@ def kmeans(mtx, mps, leaders):
 			print("%s elected leader of the %s party" % (ppair[1], ppair[0]))
 			leaders.append(ppair[1])
 	partysize = collections.defaultdict(int)
-	for mp in mps.values():
+	for mp in mpv.values():
 		partysize[mp['party']] += 1
 	for partypair in partysize.items():
 		print("%s now has %d members" % (partypair[0], partypair[1]))
+	partypie = collections.defaultdict(dict)
+	for mp in mpv.items():
+		oldparty = originalmps[mp[0]]['party']
+		newparty = mp[1]['party']
+		if oldparty not in partypie[newparty].keys():
+			partypie[newparty][oldparty] = 0
+		partypie[newparty][oldparty] += 1
+	for party in partypie.items():
+		print("%s consists of:" % party[0])
+		for partytwo in party[1].items():
+			print("\t%d %s" % (partytwo[1], partytwo[0]))
 	print("Finished!")
