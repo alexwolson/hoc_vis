@@ -130,3 +130,12 @@ def create_full_dataset():
 	mtx = build_comparison_matrix(mps, True)
 	export_tsv(mtx, 'votes_ever.tsv')
 	return mtx
+	
+def partyplots(mtx, mps):
+	partyp = collections.defaultdict(list)
+	for mpone in mps.keys():
+		for mptwo in mps.keys():
+			if mpone != mptwo:
+				if mps[mpone]['party'] == mps[mptwo]['party']:
+					partyp[mps[mpone]['party']].append(mtx[mpone][mptwo])
+	return partyp
