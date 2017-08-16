@@ -4,17 +4,13 @@ from scipy import spatial
 from nameparser import HumanName
 
 last_parl = 'http://lda.data.parliament.uk/commonsdivisions.json?maxEx-date=2017-06-08&minEx-date=2015-05-07&exists-date=true&_view=Commons+Divisions&_page=0'
+this_parl = 'http://lda.data.parliament.uk/commonsdivisions.json?minEx-date=2017-06-08&exists-date=true&_view=Commons+Divisions&_page=0'
 since_fifteen = 'http://lda.data.parliament.uk/commonsdivisions.json?minEx-date=2015-05-07&exists-date=true&_view=Commons+Divisions&_page=0'
 votes_ever = 'http://lda.data.parliament.uk/commonsdivisions.json?_view=Commons+Divisions&_page=0'
+leaders = ['Theresa May', 'Nigel Dodds', 'Jeremy Corbyn', 'Ian Blackford', 'Tim Farron', 'Liz Roberts', 'Caroline Lucas']
 
 def load_divisions(nexturl):
 	divisions = []
-	firstresult = requests.get(nexturl).json()['result']
-	nexturl = firstresult['next']
-	for division in firstresult['items']:
-		print("Division: %s" % division['title'])
-		divisions.append(division)
-	dkeys = firstresult.keys()
 	divisionsRemain = True
 	while divisionsRemain:
 		divr = requests.get(nexturl).json()['result']
@@ -54,7 +50,10 @@ def build_votebase(divisions):
 			if mpname not in mps.keys():
 				mps[mpname] = {}
 				mps[mpname]['votes'] = {}
-				mps[mpname]['party'] = vote['memberParty']
+				if "Labour" in vote['memberParty']:
+					mps[mpname]['party'] = "Labour"
+				else:
+					mps[mpname]['party'] = vote['memberParty'].replace(" ","")
 			mps[mpname]['votes'][division['uin']] = mpaye
 	return mps
 
@@ -131,6 +130,12 @@ def create_full_dataset():
 	export_tsv(mtx, 'votes_ever.tsv')
 	return mtx
 	
+def load_data(votes):
+	divisions = load_divisions(votes)
+	mps = build_votebase(divisions)
+	mtx = build_comparison_matrix(mps, True)
+	return (mps, mtx)
+	
 def partyplots(mtx, mps):
 	partyp = collections.defaultdict(list)
 	for mpone in mps.keys():
@@ -139,3 +144,63 @@ def partyplots(mtx, mps):
 				if mps[mpone]['party'] == mps[mptwo]['party']:
 					partyp[mps[mpone]['party']].append(mtx[mpone][mptwo])
 	return partyp
+
+def remove_weirdlab(mps):
+	for mp in mps.keys():
+		if "Labour" in mps[mp]['party']:
+			mps[mp]['party'] = "Labour"
+		else:
+			mps[mp]['party'] = mps[mp]['party'].replace(" ","")
+	return mps
+	
+def find_traitors(mtx, mps, leaders):
+	traitors = []
+	for mp in mps.items():
+		max_match = -1
+		best_party = ""
+		for leader in leaders:
+			if mtx[mp[0]][leader] > max_match:
+				max_match = mtx[mp[0]][leader]
+				best_party = mps[leader]['party']
+		if mp[1]['party'] != best_party:
+			traitors.append((mp[0], mp[1]['party'], best_party))
+	return traitors
+	
+def kmeans(mtx, mps, leaders):
+	oldleaders = []
+	generation = 1
+	while (oldleaders != leaders):
+		print("Year %d..." % generation)
+		generation += 1
+		mpscores = collections.defaultdict(int)
+		for mp in mps.items():
+			bestval = -1
+			bestpar = ""
+			for leader in leaders:
+				if mtx[mp[0]][leader] > bestval:
+					bestval = mtx[mp[0]][leader]
+					bestpar = mps[leader]['party']
+			if bestpar != mps[mp[0]]['party']:
+				print("%s switched allegiance from %s to %s!" % (mp[0], mps[mp[0]]['party'], bestpar))
+			mps[mp[0]]['party'] = bestpar
+		for mpone in mps.items():
+			for mptwo in mps.items():
+				if mpone[1]['party'] == mptwo[1]['party']:
+					mpscores[mptwo[0]] += mtx[mpone[0]][mptwo[0]]
+		partybestval = collections.defaultdict(int)
+		partybestper = {}
+		for mp in mps.items():
+			if mpscores[mp[0]] > partybestval[mp[1]['party']]:
+				partybestval[mp[1]['party']] = mpscores[mp[0]]
+				partybestper[mp[1]['party']] = mp[0]
+		oldleaders = leaders
+		leaders = []
+		for ppair in partybestper.items():
+			print("%s elected leader of the %s party" % (ppair[1], ppair[0]))
+			leaders.append(ppair[1])
+	partysize = collections.defaultdict(int)
+	for mp in mps.values():
+		partysize[mp['party']] += 1
+	for partypair in partysize.items():
+		print("%s now has %d members" % (partypair[0], partypair[1]))
+	print("Finished!")
