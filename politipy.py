@@ -3,6 +3,7 @@ import numpy as np
 from scipy import spatial
 from nameparser import HumanName
 
+coalition = 'http://lda.data.parliament.uk/commonsdivisions.json?maxEx-date=2015-05-07&minEx-date=2010-05-06&exists-date=true&_view=Commons+Divisions&_page=0'
 last_parl = 'http://lda.data.parliament.uk/commonsdivisions.json?maxEx-date=2017-06-08&minEx-date=2015-05-07&exists-date=true&_view=Commons+Divisions&_page=0'
 this_parl = 'http://lda.data.parliament.uk/commonsdivisions.json?minEx-date=2017-06-08&exists-date=true&_view=Commons+Divisions&_page=0'
 since_fifteen = 'http://lda.data.parliament.uk/commonsdivisions.json?minEx-date=2015-05-07&exists-date=true&_view=Commons+Divisions&_page=0'
@@ -106,8 +107,15 @@ def export_tsv(comparisons, filename='mpresults.tsv'):
 	outfile = open(filename,'w')
 	for mpone in comparisons.keys():
 		for mptwo in comparisons[mpone].keys():
-			outfile.write(mpone.replace(' ','-') + '\t' + mptwo.replace(' ','-') + '\t' + str(comparisons[mpone][mptwo] + 1) + '\n')
+			outfile.write(mpone.replace(' ','-') + '\t' + mptwo.replace(' ','-') + '\t' + str(comparisons[mpone][mptwo]) + '\n')
 	outfile.close()
+	
+def create_coalition_dataset():
+	divisions = load_divisions(coalition)
+	mps = build_votebase(divisions)
+	mtx = build_comparison_matrix(mps)
+	export_tsv(mtx, 'coalition.tsv')
+	return mtx
 	
 def create_last_parl_dataset():
 	divisions = load_divisions(last_parl)
@@ -116,6 +124,13 @@ def create_last_parl_dataset():
 	export_tsv(mtx, 'last_parl.tsv')
 	return mtx
 	
+def create_this_parl_dataset():
+	divisions = load_divisions(this_parl)
+	mps = build_votebase(divisions)
+	mtx = build_comparison_matrix(mps)
+	export_tsv(mtx, 'this_parl.tsv')
+	return mtx	
+
 def create_since_fifteen_dataset():
 	divisions = load_divisions(since_fifteen)
 	mps = build_votebase(divisions)
@@ -144,6 +159,15 @@ def partyplots(mtx, mps):
 				if mps[mpone]['party'] == mps[mptwo]['party']:
 					partyp[mps[mpone]['party']].append(mtx[mpone][mptwo])
 	return partyp
+	
+def bipartyplots(mtx, mps):
+	partyp = collections.defaultdict(list)
+	for mpone in mps.keys():
+		for mptwo in mps.keys():
+			if mpone != mptwo:
+				if mps[mpone]['party'] != mps[mptwo]['party']:
+					partyp[mps[mpone]['party']].append(mtx[mpone][mptwo])
+	return partyp
 
 def remove_weirdlab(mps):
 	for mp in mps.keys():
@@ -165,6 +189,42 @@ def find_traitors(mtx, mps, leaders):
 		if mp[1]['party'] != best_party:
 			traitors.append((mp[0], mp[1]['party'], best_party))
 	return traitors
+	
+def encode_parties(mps):
+	pdict = {}
+	next = 0
+	for mp in mps.items():
+		if mp[1]['party'] not in pdict.keys():
+			pdict[mp[1]['party']] = next
+			next += 1
+	print(pdict)
+	return pdict
+	
+def plot_compass(mtx, mps):
+	nmps = len(mps.keys())
+	mpa = np.zeros((nmps, 3))
+	colordict = encode_parties(mps)
+	for i, mp in enumerate(mps.items()):
+		mpa[i][0] = mtx['Jeremy Corbyn'][mp[0]]
+		mpa[i][1] = mtx['Theresa May'][mp[0]]
+		mpa[i][2] = colordict[mp[1]['party']]
+	import scipy.io as sio
+	sio.savemat("mpcompass.mat", mdict={'mpa':mpa})
+	return mpa
+	
+def plot_compass_three(mtx, mps):
+	nmps = len(mps.keys())
+	mpa = np.zeros((nmps, 4))
+	colordict = encode_parties(mps)
+	for i, mp in enumerate(mps.items()):
+		mpa[i][0] = mtx['Jeremy Corbyn'][mp[0]]
+		mpa[i][1] = mtx['Theresa May'][mp[0]]
+		mpa[i][2] = mtx['Angus Robertson'][mp[0]]
+		mpa[i][3] = colordict[mp[1]['party']]
+	import scipy.io as sio
+	sio.savemat("mpcompass.mat", mdict={'mpa':mpa})
+	return mpa
+	
 	
 def kmeans(matx, mpv, leaders):
 	originalmps = mpv
